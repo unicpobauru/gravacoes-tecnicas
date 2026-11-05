@@ -99,6 +99,8 @@ button{cursor:pointer}
 .card.u-warn{border-left-color:var(--warn)}
 .card.u-ok{border-left-color:var(--good)}
 .card.done{border-left-color:var(--accent)}
+.card.ready{border-left-color:var(--text)}
+.tag.ready{background:var(--text);color:var(--surface)}
 .card .row1{display:flex;gap:8px;align-items:flex-start}
 .card .title{font-weight:600;font-size:13px;line-height:1.3;flex:1}
 .card .meta{font-size:11.5px;color:var(--text-2);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 10px}
@@ -522,8 +524,8 @@ const v1Month = c => c.start ? addMonths(new Date(pd(c.start).getFullYear(), pd(
 const v2Month = c => c.start ? new Date(pd(c.start).getFullYear(), pd(c.start).getMonth(), 1) : null;
 
 function urgency(c) {
-  if (c.status === 'editado') return { cls: 'done', tag: '<span class="tag ok">Editado e pronto</span>' };
-  if (c.status === 'gravado') return { cls: 'done', tag: '<span class="tag info">Gravado · falta editar</span>' };
+  if (c.status === 'editado') return { cls: 'done ready', tag: '<span class="tag ready">🎬 Editado e pronto</span>' };
+  if (c.status === 'gravado') return { cls: 'done', tag: '<span class="tag info">🎥 Gravado · falta editar</span>' };
   const dl = deadlineOf(c); if (!dl) return { cls: '', tag: '' };
   const left = daysBetween(todayD(), dl);
   if (c.recordDate) {
@@ -679,8 +681,8 @@ function renderCal() {
   const box = (arr, key) => {
     if (!arr.length) return '<div class="none">Nenhum.</div>';
     const grp = [
-      ['✓ Editados e prontos para postar · arraste para o dia', arr.filter(c => c.status === 'editado')],
-      ['Gravados · falta editar', arr.filter(c => c.status === 'gravado')],
+      ['🎬 Editados e prontos para postar · arraste para o dia', arr.filter(c => c.status === 'editado')],
+      ['🎥 Gravados · falta editar', arr.filter(c => c.status === 'gravado')],
       ['Ainda falta gravar', arr.filter(c => !recorded(c))],
     ];
     return grp.filter(g => g[1].length).map(([t, a]) => `<div class="sub-h">${t} (${a.length})</div>${a.map(c => item(c, key)).join('')}`).join('');
