@@ -133,6 +133,9 @@ button{cursor:pointer}
 .release label{display:flex;gap:7px;align-items:center;font-size:12.5px;padding:2px 0}
 .release label.pub span{text-decoration:line-through;color:var(--muted)}
 .release .none{font-size:12px;color:var(--muted)}
+.release .sub-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);margin:6px 0 2px}
+.release label.ready{background:var(--surface);border-radius:7px;padding:4px 7px;margin:2px 0;font-weight:600}
+.release label.waiting span{color:var(--text-2)}
 .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .dow{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;padding:8px 8px 4px;letter-spacing:.04em}
 .day{min-height:112px;border-top:1px solid var(--border);border-right:1px solid var(--border);padding:5px;position:relative}
@@ -651,10 +654,18 @@ function renderCal() {
   const m = ym(cursor);
   const v1 = act.filter(c => v1Month(c) && ym(v1Month(c)) === m);
   const v2 = act.filter(c => v2Month(c) && ym(v2Month(c)) === m);
-  const item = (c, key) => `<label class="${c[key] ? 'pub' : ''}"><input type="checkbox" data-pub="${key}" data-id="${c.id}" ${c[key] ? 'checked' : ''}>${avatarHTML(coordById(c.coordId), 'xs')}<span>${esc(c.name)}${c.status !== 'gravado' ? ' <em style="color:var(--crit);font-style:normal;font-size:11px">· ainda não gravado</em>' : ''}</span></label>`;
+  const ready = c => c.status === 'gravado';
+  const item = (c, key) => `<label class="${c[key] ? 'pub' : ''} ${ready(c) ? 'ready' : 'waiting'}"><input type="checkbox" data-pub="${key}" data-id="${c.id}" ${c[key] ? 'checked' : ''} title="Marque quando publicar">${avatarHTML(coordById(c.coordId), 'xs')}<span>${esc(c.name)}${c[key] ? ' · publicado' : ''}</span></label>`;
+  // gravados (prontos para postar) em cima, em destaque; os que faltam gravar embaixo
+  const box = (arr, key) => {
+    if (!arr.length) return '<div class="none">Nenhum.</div>';
+    const r = arr.filter(ready), w = arr.filter(c => !ready(c));
+    return (r.length ? `<div class="sub-h">✓ Gravados, prontos para postar (${r.length})</div>${r.map(c => item(c, key)).join('')}` : '')
+      + (w.length ? `<div class="sub-h">Ainda falta gravar (${w.length})</div>${w.map(c => item(c, key)).join('')}` : '');
+  };
   $('#release').innerHTML = `
-    <div class="box v1"><h3>Publicar vídeo 1 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos que começam ${lead()} meses depois)</span></h3>${v1.length ? v1.map(c => item(c, 'v1Pub')).join('') : '<div class="none">Nenhum.</div>'}</div>
-    <div class="box v2"><h3>Publicar vídeo 2 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos rolando neste mês)</span></h3>${v2.length ? v2.map(c => item(c, 'v2Pub')).join('') : '<div class="none">Nenhum.</div>'}</div>`;
+    <div class="box v1"><h3>Publicar vídeo 1 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos que começam ${lead()} meses depois)</span></h3>${box(v1, 'v1Pub')}</div>
+    <div class="box v2"><h3>Publicar vídeo 2 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos rolando neste mês)</span></h3>${box(v2, 'v2Pub')}</div>`;
 }
 
 function chipHTML(c) {
