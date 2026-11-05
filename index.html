@@ -479,7 +479,9 @@ let cursor = (() => { const t = todayD(); return new Date(t.getFullYear(), t.get
 
 function render() { renderBanner(); renderSide(); renderCal(); renderList(); }
 
-function activeCourses() { return S.courses.filter(c => c.status !== 'cancelado'); }
+// Prazo vencido sem gravação marcada = ignorado (some do site; volta sozinho se a data do curso mudar)
+const expired = c => { const dl = deadlineOf(c); return !!dl && dl < todayD() && !c.recordDate && c.status !== 'gravado'; };
+function activeCourses() { return S.courses.filter(c => c.status !== 'cancelado' && !expired(c)); }
 
 function renderSide() {
   const body = $('#sideBody');
@@ -574,7 +576,7 @@ function renderList() {
   $('#listView').classList.toggle('hidden', UI.view !== 'list');
   $('#prevM').disabled = $('#nextM').disabled = $('#todayBtn').disabled = UI.view !== 'cal';
   if (UI.view !== 'list') return;
-  const rows = [...S.courses].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  const rows = S.courses.filter(c => !expired(c)).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   $('#listView').innerHTML = rows.length ? `<table><thead><tr><th>Curso</th><th>Coordenador</th><th>Início</th><th>Prazo gravar</th><th>Gravação</th><th>Quem grava</th><th>Status</th><th>Vídeo 1</th><th>Vídeo 2</th></tr></thead><tbody>
     ${rows.map(c => { const co = coordById(c.coordId); const u = urgency(c); const a = v1Month(c), b = v2Month(c);
       return `<tr class="${c.status === 'cancelado' ? 'removed' : ''}" data-edit="${c.id}" style="cursor:pointer">
@@ -589,8 +591,8 @@ function renderList() {
 
 function renderBanner() {
   const w = $('#bannerWrap');
-  const news = S.courses.filter(c => c.flagNew && c.status !== 'cancelado' && !c.recordDate);
-  const chg = S.courses.filter(c => c.flagChanged && c.status !== 'cancelado');
+  const news = activeCourses().filter(c => c.flagNew && !c.recordDate);
+  const chg = activeCourses().filter(c => c.flagChanged);
   if (!news.length && !chg.length) { w.innerHTML = ''; return; }
   w.innerHTML = `<div class="banner"><div>
     ${news.length ? `<b>Você precisa gravar ${news.length} curso${news.length > 1 ? 's' : ''} novo${news.length > 1 ? 's' : ''}:</b> ${news.map(c => esc(c.name) + ' (' + esc(coordById(c.coordId)?.name || '?') + ')').join(' · ')}` : ''}
@@ -930,14 +932,14 @@ function showDiff(cursos, source) {
       changed.push({ c: m, r, diffs, warn });
     } else same.push(m);
   }
-  const missing = pool.filter(c => !used.has(c.id) && c.start && ym(pd(c.start)) >= t0);
+  const missing = pool.filter(c => !used.has(c.id) && c.start && ym(pd(c.start)) >= t0 && !expired(c));
   pending = { added, changed, missing, source, total: cursos.length };
 
   const item = (inner, key, i, checked = true) => `<label class="diff-item"><input type="checkbox" data-k="${key}" data-i="${i}" ${checked ? 'checked' : ''}><div style="flex:1">${inner}</div></label>`;
   $('#diffBody').innerHTML = `
     <p class="hint" style="margin-top:0">${cursos.length} curso(s) encontrados. Revise antes de aplicar — desmarque o que estiver errado.</p>
     <div class="diff-sec"><h4><span class="tag new">${added.length}</span> Cursos novos — você precisa gravar</h4>
-      ${added.length ? added.map((r, i) => item(`<b>${esc(r.nome)}</b><div class="hint" style="margin:2px 0 0">${esc(r.coordenador || 'sem coordenador')}${findCoord(r.coordenador) ? '' : (r.coordenador ? ' <span class="tag warn">coordenador novo</span>' : '')} · início ${fmt(r.data_inicio)} · gravar até ${r.data_inicio ? fmt(iso(addMonths(pd(r.data_inicio), -lead()))) : '—'}${r.observacao ? ' · ' + esc(r.observacao) : ''}</div>`, 'a', i)).join('') : '<div class="hint">Nenhum.</div>'}
+      ${added.length ? added.map((r, i) => item(`<b>${esc(r.nome)}</b><div class="hint" style="margin:2px 0 0">${esc(r.coordenador || 'sem coordenador')}${findCoord(r.coordenador) ? '' : (r.coordenador ? ' <span class="tag warn">coordenador novo</span>' : '')} · início ${fmt(r.data_inicio)} · gravar até ${r.data_inicio ? fmt(iso(addMonths(pd(r.data_inicio), -lead()))) : '—'}${r.data_inicio && addMonths(pd(r.data_inicio), -lead()) < todayD() ? ' <span class="tag info">prazo já passou: fica guardado, mas oculto</span>' : ''}${r.observacao ? ' · ' + esc(r.observacao) : ''}</div>`, 'a', i)).join('') : '<div class="hint">Nenhum.</div>'}
     </div>
     <div class="diff-sec"><h4><span class="tag chg">${changed.length}</span> Mudaram</h4>
       ${changed.length ? changed.map((x, i) => item(`<b>${esc(x.c.name)}</b>${x.diffs.map(d => `<div>${d[0]}: <span class="old">${esc(d[1])}</span> → <span class="new">${esc(d[2])}</span></div>`).join('')}${x.warn ? `<div class="warn">${esc(x.warn)}</div>` : ''}`, 'c', i)).join('') : '<div class="hint">Nenhum.</div>'}
