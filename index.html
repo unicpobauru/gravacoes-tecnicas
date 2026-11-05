@@ -903,6 +903,7 @@ $('#parsePaste').onclick = () => {
 
 /* Comparação com o que já existe */
 let pending = null;
+const turma = s => { const m = String(s || '').match(/\bT\s?-?(\d{1,4})\b/i); return m ? 'T' + Number(m[1]) : ''; };
 function showDiff(cursos, source) {
   const t0 = ym(todayD());
   const pool = S.courses.filter(c => c.status !== 'cancelado');
@@ -910,7 +911,10 @@ function showDiff(cursos, source) {
   const added = [], changed = [], same = [];
   for (const r of cursos) {
     const n = norm(r.nome), cn = norm(r.coordenador);
-    const cands = pool.filter(c => !used.has(c.id) && norm(c.name) === n);
+    // a turma (T35, T377…) é a identidade do curso: se existir, casa só por ela
+    const tr = turma(r.nome) || turma(r.observacao);
+    const cands = tr ? pool.filter(c => !used.has(c.id) && turma(c.name) === tr)
+                     : pool.filter(c => !used.has(c.id) && norm(c.name) === n);
     let m = cands.find(c => norm(coordById(c.coordId)?.name) === cn || findCoord(r.coordenador)?.id === c.coordId) || (cands.length === 1 ? cands[0] : null);
     if (!m && cands.length > 1) m = cands.sort((a, b) => Math.abs(pd(a.start) - pd(r.data_inicio)) - Math.abs(pd(b.start) - pd(r.data_inicio)))[0];
     if (!m) { added.push(r); continue; }
