@@ -246,6 +246,7 @@ td .who{display:flex;align-items:center;gap:7px}
       <div class="seg" id="sideFilter">
         <button data-f="pend" class="on">Sem data</button>
         <button data-f="all">Todos</button>
+        <button data-f="ready">🎬 Prontos</button>
       </div>
     </div>
     <div class="side-sort"><span>Organizar:</span>
@@ -580,12 +581,30 @@ function activeCourses() { return S.courses.filter(c => c.status !== 'cancelado'
 function renderSide() {
   const body = $('#sideBody');
   document.querySelectorAll('#sideFilter button').forEach(b => b.classList.toggle('on', b.dataset.f === UI.filter));
+  document.querySelector('.side-sort').style.display = UI.filter === 'ready' ? 'none' : '';
   const t0 = ym(todayD());
   let list = activeCourses().filter(c => !c.start || ym(pd(c.start)) >= t0);
+  // Sem data = falta marcar gravação · Todos = tudo que ainda não está pronto · Prontos = editados com vídeo para postar
+  const nextVideo = c => !c.v1Pub ? 1 : !c.v2Pub ? 2 : 0;
   if (UI.filter === 'pend') list = list.filter(c => !c.recordDate && !recorded(c));
+  else if (UI.filter === 'ready') list = activeCourses().filter(c => c.status === 'editado' && nextVideo(c));
+  else list = list.filter(c => c.status !== 'editado');
   $('#pendCount').textContent = activeCourses().filter(c => !c.recordDate && !recorded(c) && (!c.start || ym(pd(c.start)) >= t0)).length;
   if (!list.length) {
-    body.innerHTML = `<div class="empty">${S.courses.length ? 'Tudo agendado por aqui.' : 'Suba a PNG do cronograma para ver os cursos que precisam de vídeo técnico.'}</div>`;
+    body.innerHTML = `<div class="empty">${!S.courses.length ? 'Suba a PNG do cronograma para ver os cursos que precisam de vídeo técnico.' : UI.filter === 'ready' ? 'Nenhum vídeo editado esperando para postar.' : 'Tudo agendado por aqui.'}</div>`;
+    return;
+  }
+  if (UI.filter === 'ready') {
+    // agrupa pelo mês em que sai o próximo vídeo (1 ou 2)
+    const when = c => nextVideo(c) === 1 ? v1Month(c) : v2Month(c);
+    const groups = new Map();
+    for (const c of [...list].sort((a, b) => (when(a)?.getTime() ?? Infinity) - (when(b)?.getTime() ?? Infinity) || 0)) {
+      const w = when(c), n = nextVideo(c);
+      const k = w ? `Vídeo ${n} sai em ${MESES[w.getMonth()]}/${w.getFullYear()}` : 'Sem data de postagem';
+      if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c);
+    }
+    body.innerHTML = [...groups.entries()].map(([k, arr]) =>
+      `<div class="coord-group"><div class="month-head"><span>🎬 ${k}</span><span class="n">${arr.length}</span></div>${arr.map(c => cardHTML(c, true)).join('')}</div>`).join('');
     return;
   }
   document.querySelectorAll('#sideGroup button').forEach(b => b.classList.toggle('on', b.dataset.g === UI.group));
