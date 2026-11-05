@@ -562,7 +562,7 @@ function renderSide() {
   // agrupa por coordenador
   const groups = new Map();
   for (const c of list) { const k = c.coordId || '_'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
-  const byDl = (a, b) => (deadlineOf(a) || 0) - (deadlineOf(b) || 0);
+  const byDl = (a, b) => (deadlineOf(a)?.getTime() ?? Infinity) - (deadlineOf(b)?.getTime() ?? Infinity) || 0; // sem data vai pro fim
   const ordered = [...groups.entries()].map(([k, arr]) => [k, arr.sort(byDl)]).sort((a, b) => byDl(a[1][0], b[1][0]));
   body.innerHTML = ordered.map(([k, arr]) => {
     const co = coordById(k);
