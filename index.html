@@ -43,7 +43,9 @@ body{background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 .top{background:var(--brand);color:var(--brand-ink);padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
-.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.01em;margin-right:auto}
+.top h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.01em}
+.sync{background:none;border:0;font:inherit;font-size:12px;color:var(--brand-ink);opacity:.75;cursor:pointer;padding:2px 6px;border-radius:6px;margin-right:auto}
+.sync:hover{opacity:1;text-decoration:underline}.sync.err{opacity:1;color:#ffb4a8}
 .top h1 small{font-weight:500;opacity:.7;margin-left:6px}
 .btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:7px 12px;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:hover{background:var(--surface-2)}
@@ -202,6 +204,7 @@ td .who{display:flex;align-items:center;gap:7px}
 
 <header class="top">
   <h1>Gravações Técnicas <small>UniCPO</small></h1>
+  <button class="sync" id="syncStat" title="Onde os dados estão salvos"></button>
   <button class="btn primary" id="btnImport">
     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>
     Subir cronograma
@@ -375,6 +378,11 @@ td .who{display:flex;align-items:center;gap:7px}
         <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
       </div>
       <p class="hint">A chave fica guardada só neste navegador e não entra no backup. Crie em console.anthropic.com → API Keys. Cada leitura de imagem custa alguns centavos.</p>
+      <div class="field">
+        <label>Link da planilha (Apps Script, termina em /exec)</label>
+        <input type="url" id="sheetUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      </div>
+      <p class="hint">Com o link, tudo é salvo automaticamente na Planilha Google e aparece igual em qualquer computador. Para os professores, mande o link do site com <code>?planilha=</code> + este link no final.</p>
       <div class="row">
         <div class="field"><label>Meses antes do curso para o vídeo 1</label><input type="number" id="leadMonths" min="1" max="6"></div>
         <div class="field"><label>Tema</label>
@@ -401,7 +409,59 @@ let S = (() => { try { return Object.assign(blank(), JSON.parse(safeGet(KEY)) ||
 let UI = (() => { try { return Object.assign({ filter: 'pend', view: 'cal' }, JSON.parse(safeGet(KEY_UI)) || {}); } catch { return { filter: 'pend', view: 'cal' }; } })();
 function save() {
   if (!safeSet(KEY, JSON.stringify(S))) toast('Não consegui salvar no navegador (armazenamento cheio?). Baixe um backup.');
+  schedulePush();
 }
+
+/* ============ Planilha Google (Apps Script) ============ */
+const KEY_SHEET = 'gravacoes-unicpo-sheet';
+(() => { // ?planilha=<link> no endereço configura sozinho (para mandar aos professores)
+  const q = new URLSearchParams(location.search).get('planilha');
+  if (q && /^https:\/\/script\.google(usercontent)?\.com\//.test(q)) { safeSet(KEY_SHEET, q); history.replaceState(null, '', location.pathname); }
+})();
+const sheetUrl = () => safeGet(KEY_SHEET) || '';
+let remoteReady = false, pushTimer = null, pushing = false, dirty = false;
+function syncStat(cls, txt) { const b = document.getElementById('syncStat'); if (b) { b.className = 'sync ' + cls; b.textContent = txt; } }
+function schedulePush() {
+  if (!sheetUrl() || !remoteReady) return;
+  dirty = true; syncStat('', 'Salvando…');
+  clearTimeout(pushTimer); pushTimer = setTimeout(push, 1200);
+}
+async function push() {
+  if (pushing) { pushTimer = setTimeout(push, 800); return; }
+  pushing = true; dirty = false;
+  try {
+    const r = await fetch(sheetUrl(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(S) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'erro na planilha');
+    if (!dirty) syncStat('ok', '✓ Salvo na planilha');
+  } catch (e) {
+    dirty = true; syncStat('err', '⚠ Não salvou na planilha — clique para tentar de novo');
+  } finally { pushing = false; }
+}
+async function pull() {
+  if (!sheetUrl()) { remoteReady = false; syncStat('', 'Salvo só neste navegador'); return; }
+  syncStat('', 'Carregando da planilha…');
+  try {
+    const j = await fetch(sheetUrl()).then(r => r.json());
+    if (Array.isArray(j.courses) && Array.isArray(j.coordinators)) {
+      S = Object.assign(blank(), j); safeSet(KEY, JSON.stringify(S)); render();
+      remoteReady = true; syncStat('ok', '✓ Salvo na planilha');
+    } else { // planilha vazia: manda o que já está neste navegador
+      remoteReady = true; await push();
+    }
+  } catch (e) {
+    remoteReady = false; syncStat('err', '⚠ Sem conexão com a planilha — clique para tentar de novo');
+  }
+}
+document.addEventListener('click', e => {
+  if (e.target.id !== 'syncStat') return;
+  if (!sheetUrl()) { openSettings(); return; }
+  remoteReady && dirty ? push() : pull();
+});
+// ao voltar para a aba, pega o que outra pessoa mudou
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sheetUrl() && remoteReady && !dirty && !pushing && !document.querySelector('.modal-bg.open')) pull();
+});
 function saveUI() { safeSet(KEY_UI, JSON.stringify({ filter: UI.filter, view: UI.view })); }
 const theme = safeGet('gravacoes-unicpo-theme');
 if (theme) document.documentElement.dataset.theme = theme;
@@ -1003,6 +1063,7 @@ $('#wipeBtn').onclick = () => { if (confirm('Apagar todos os cursos e coordenado
 /* ============ Settings ============ */
 function openSettings() {
   $('#apiKey').value = safeGet(KEY_API) || '';
+  $('#sheetUrl').value = sheetUrl();
   $('#leadMonths').value = lead();
   $('#themeSel').value = document.documentElement.dataset.theme || '';
   open('#mSettings');
@@ -1015,10 +1076,15 @@ $('#saveSettings').onclick = () => {
   const th = $('#themeSel').value;
   if (th) document.documentElement.dataset.theme = th; else delete document.documentElement.dataset.theme;
   safeSet('gravacoes-unicpo-theme', th);
+  const su = $('#sheetUrl').value.trim(), suChanged = su !== sheetUrl();
+  if (su && !/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(su)) { alert('Esse link não parece do Apps Script. Ele começa com https://script.google.com/macros/s/ e termina em /exec.'); return; }
+  if (suChanged) { if (su) safeSet(KEY_SHEET, su); else { try { localStorage.removeItem(KEY_SHEET); } catch {} } remoteReady = false; }
   save(); render(); $('#mSettings').classList.remove('open'); toast('Configurações salvas.');
+  if (suChanged) pull();
 };
 
 render();
+pull();
 </script>
 </body>
 </html>
