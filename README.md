@@ -2,6 +2,8 @@
 
 Calendário das gravações dos vídeos técnicos dos cursos UniCPO.
 
+Site: https://unicpobauru.github.io/gravacoes-tecnicas/ (os dados ficam na Planilha Google configurada em ⚙ Configurações; nada de dados neste repositório).
+
 ## Como funciona
 1. Todo começo de mês, clique em **Subir cronograma** e envie a PNG com os cursos dos próximos 4 meses.
 2. O Claude lê a imagem e mostra: cursos **novos** (precisa gravar), cursos que **mudaram de data** e cursos que **saíram** do cronograma. Você revisa e aplica.
