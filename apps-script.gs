@@ -42,14 +42,14 @@ function doPost(e) {
     cs.clear();
     const nome = {};
     (S.coordinators || []).forEach(c => nome[c.id] = c.name);
-    const STATUS = { a_contatar: 'A contatar', contatado: 'Contatado', agendado: 'Agendado', gravado: 'Gravado', cancelado: 'Cancelado' };
-    const linhas = [['Curso', 'Coordenador', 'Início do curso', 'Quem grava', 'Telefone', 'Data da gravação', 'Status', 'Vídeo 1 publicado', 'Vídeo 2 publicado', 'Observações']];
+    const STATUS = { a_contatar: 'A contatar', contatado: 'Contatado', agendado: 'Agendado', gravado: 'Gravado (falta editar)', editado: 'Editado e pronto', cancelado: 'Cancelado' };
+    const linhas = [['Curso', 'Coordenador', 'Início do curso', 'Quem grava', 'Telefone', 'Data da gravação', 'Status', 'Postar vídeo 1 em', 'Vídeo 1 publicado', 'Postar vídeo 2 em', 'Vídeo 2 publicado', 'Observações']];
     (S.courses || []).slice()
       .sort((a, b) => String(a.start || '').localeCompare(String(b.start || '')))
       .forEach(c => linhas.push([
         c.name || '', nome[c.coordId] || '', br(c.start), c.teacher || '', c.phone || '',
         br(c.recordDate) + (c.recordTime ? ' ' + c.recordTime : ''), STATUS[c.status] || c.status || '',
-        c.v1Pub ? 'sim' : '', c.v2Pub ? 'sim' : '', c.notes || ''
+        br(c.v1Post), c.v1Pub ? 'sim' : '', br(c.v2Post), c.v2Pub ? 'sim' : '', c.notes || ''
       ]));
     const rg = cs.getRange(1, 1, linhas.length, linhas[0].length);
     rg.setNumberFormat('@');

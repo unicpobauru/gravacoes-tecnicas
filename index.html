@@ -149,6 +149,12 @@ button{cursor:pointer}
 .chip{display:flex;gap:5px;align-items:center;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:6px;padding:3px 5px;margin-bottom:3px;font-size:11.5px;cursor:grab;line-height:1.25}
 .chip.gravado{background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
 .chip.late{background:var(--crit-soft);border-color:var(--crit)}
+.chip.post.v1{background:var(--v1-soft);border-color:color-mix(in srgb,var(--v1) 40%,transparent)}
+.chip.post.v2{background:var(--v2-soft);border-color:color-mix(in srgb,var(--v2) 40%,transparent)}
+.chip.post.v1 b{color:var(--v1)}.chip.post.v2 b{color:var(--v2)}
+.chip.post.done{opacity:.6}
+.release label.dragme{cursor:grab}
+.release label .grip{margin-left:auto;color:var(--muted);font-size:14px}
 .chip .t{overflow:hidden;min-width:0}
 .chip .t b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip .t span{color:var(--text-2);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -335,7 +341,8 @@ td .who{display:flex;align-items:center;gap:7px}
             <option value="a_contatar">A contatar</option>
             <option value="contatado">Contatado</option>
             <option value="agendado">Agendado</option>
-            <option value="gravado">Gravado</option>
+            <option value="gravado">Gravado (falta editar)</option>
+            <option value="editado">Editado e pronto para postar</option>
             <option value="cancelado">Cancelado / saiu do cronograma</option>
           </select>
         </div>
@@ -343,6 +350,10 @@ td .who{display:flex;align-items:center;gap:7px}
           <label style="font-weight:500;display:flex;gap:6px;align-items:center"><input type="checkbox" id="cV1"> Vídeo 1 publicado <span class="tag v1" id="cV1m"></span></label>
           <label style="font-weight:500;display:flex;gap:6px;align-items:center"><input type="checkbox" id="cV2"> Vídeo 2 publicado <span class="tag v2" id="cV2m"></span></label>
         </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Postar vídeo 1 em</label><input type="date" id="cP1"></div>
+        <div class="field"><label>Postar vídeo 2 em</label><input type="date" id="cP2"></div>
       </div>
       <div class="field"><label>Anotações</label><textarea id="cNotes" style="font-family:inherit;min-height:60px"></textarea></div>
       <div class="hint" id="cInfo"></div>
@@ -511,7 +522,8 @@ const v1Month = c => c.start ? addMonths(new Date(pd(c.start).getFullYear(), pd(
 const v2Month = c => c.start ? new Date(pd(c.start).getFullYear(), pd(c.start).getMonth(), 1) : null;
 
 function urgency(c) {
-  if (c.status === 'gravado') return { cls: 'done', tag: '<span class="tag info">Gravado</span>' };
+  if (c.status === 'editado') return { cls: 'done', tag: '<span class="tag ok">Editado e pronto</span>' };
+  if (c.status === 'gravado') return { cls: 'done', tag: '<span class="tag info">Gravado · falta editar</span>' };
   const dl = deadlineOf(c); if (!dl) return { cls: '', tag: '' };
   const left = daysBetween(todayD(), dl);
   if (c.recordDate) {
@@ -558,7 +570,9 @@ let cursor = (() => { const t = todayD(); return new Date(t.getFullYear(), t.get
 function render() { renderBanner(); renderSide(); renderCal(); renderList(); }
 
 // Prazo vencido sem gravação marcada = ignorado (some do site; volta sozinho se a data do curso mudar)
-const expired = c => { const dl = deadlineOf(c); return !!dl && dl < todayD() && !c.recordDate && c.status !== 'gravado'; };
+// gravado = já gravou (falta editar); editado = editado e pronto para postar
+const recorded = c => c.status === 'gravado' || c.status === 'editado';
+const expired = c => { const dl = deadlineOf(c); return !!dl && dl < todayD() && !c.recordDate && !recorded(c); };
 function activeCourses() { return S.courses.filter(c => c.status !== 'cancelado' && !expired(c)); }
 
 function renderSide() {
@@ -566,8 +580,8 @@ function renderSide() {
   document.querySelectorAll('#sideFilter button').forEach(b => b.classList.toggle('on', b.dataset.f === UI.filter));
   const t0 = ym(todayD());
   let list = activeCourses().filter(c => !c.start || ym(pd(c.start)) >= t0);
-  if (UI.filter === 'pend') list = list.filter(c => !c.recordDate && c.status !== 'gravado');
-  $('#pendCount').textContent = activeCourses().filter(c => !c.recordDate && c.status !== 'gravado' && (!c.start || ym(pd(c.start)) >= t0)).length;
+  if (UI.filter === 'pend') list = list.filter(c => !c.recordDate && !recorded(c));
+  $('#pendCount').textContent = activeCourses().filter(c => !c.recordDate && !recorded(c) && (!c.start || ym(pd(c.start)) >= t0)).length;
   if (!list.length) {
     body.innerHTML = `<div class="empty">${S.courses.length ? 'Tudo agendado por aqui.' : 'Suba a PNG do cronograma para ver os cursos que precisam de vídeo técnico.'}</div>`;
     return;
@@ -628,11 +642,12 @@ function renderCal() {
   const start = new Date(first); start.setDate(1 - first.getDay());
   const tIso = iso(todayD());
   const act = activeCourses();
-  const recBy = {}, startBy = {}, dlBy = {};
+  const recBy = {}, startBy = {}, dlBy = {}, postBy = {};
   for (const c of act) {
+    for (const pk of ['v1Post', 'v2Post']) if (c[pk]) (postBy[c[pk]] ||= []).push([c, pk]);
     if (c.recordDate) (recBy[c.recordDate] ||= []).push(c);
     if (c.start) (startBy[c.start] ||= []).push(c);
-    const dl = deadlineOf(c); if (dl && !c.recordDate && c.status !== 'gravado') (dlBy[iso(dl)] ||= []).push(c);
+    const dl = deadlineOf(c); if (dl && !c.recordDate && !recorded(c)) (dlBy[iso(dl)] ||= []).push(c);
   }
   let html = '';
   for (let i = 0; i < 42; i++) {
@@ -646,6 +661,7 @@ function renderCal() {
       ${(startBy[k] || []).map(c => `<div class="start-mark" data-edit="${c.id}" title="Início: ${esc(c.name)}">Início · ${esc(c.name)}</div>`).join('')}
       ${(dlBy[k] || []).map(c => `<div class="deadline-mark" data-edit="${c.id}" title="Prazo para gravar: ${esc(c.name)}">Prazo · ${esc(c.name)}</div>`).join('')}
       ${(recBy[k] || []).sort((a, b) => (a.recordTime || '').localeCompare(b.recordTime || '')).map(chipHTML).join('')}
+      ${(postBy[k] || []).map(([c, pk]) => postChipHTML(c, pk)).join('')}
     </div>`;
   }
   $('#days').innerHTML = html;
@@ -654,29 +670,41 @@ function renderCal() {
   const m = ym(cursor);
   const v1 = act.filter(c => v1Month(c) && ym(v1Month(c)) === m);
   const v2 = act.filter(c => v2Month(c) && ym(v2Month(c)) === m);
-  const ready = c => c.status === 'gravado';
-  const item = (c, key) => `<label class="${c[key] ? 'pub' : ''} ${ready(c) ? 'ready' : 'waiting'}"><input type="checkbox" data-pub="${key}" data-id="${c.id}" ${c[key] ? 'checked' : ''} title="Marque quando publicar">${avatarHTML(coordById(c.coordId), 'xs')}<span>${esc(c.name)}${c[key] ? ' · publicado' : ''}</span></label>`;
-  // gravados (prontos para postar) em cima, em destaque; os que faltam gravar embaixo
+  const item = (c, key) => {
+    const pk = key.replace('Pub', 'Post'), cls = c.status === 'editado' ? 'ready' : 'waiting';
+    const can = c.status === 'editado' && !c[key]; // só arrasta o que está editado e ainda não foi postado
+    return `<label class="${c[key] ? 'pub' : ''} ${cls} ${can ? 'dragme' : ''}" ${can ? `draggable="true" data-id="${c.id}" data-post="${pk}" title="Arraste para o dia de postar"` : ''}><input type="checkbox" data-pub="${key}" data-id="${c.id}" ${c[key] ? 'checked' : ''} title="Marque quando publicar">${avatarHTML(coordById(c.coordId), 'xs')}<span>${esc(c.name)}${c[key] ? ' · publicado' : c[pk] ? ` · <b>postar ${fmt(c[pk])}</b>` : ''}</span>${can ? '<span class="grip">⠿</span>' : ''}</label>`;
+  };
+  // editados (prontos) em cima e em destaque; depois gravados que faltam editar; por último os que faltam gravar
   const box = (arr, key) => {
     if (!arr.length) return '<div class="none">Nenhum.</div>';
-    const r = arr.filter(ready), w = arr.filter(c => !ready(c));
-    return (r.length ? `<div class="sub-h">✓ Gravados, prontos para postar (${r.length})</div>${r.map(c => item(c, key)).join('')}` : '')
-      + (w.length ? `<div class="sub-h">Ainda falta gravar (${w.length})</div>${w.map(c => item(c, key)).join('')}` : '');
+    const grp = [
+      ['✓ Editados e prontos para postar · arraste para o dia', arr.filter(c => c.status === 'editado')],
+      ['Gravados · falta editar', arr.filter(c => c.status === 'gravado')],
+      ['Ainda falta gravar', arr.filter(c => !recorded(c))],
+    ];
+    return grp.filter(g => g[1].length).map(([t, a]) => `<div class="sub-h">${t} (${a.length})</div>${a.map(c => item(c, key)).join('')}`).join('');
   };
   $('#release').innerHTML = `
     <div class="box v1"><h3>Publicar vídeo 1 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos que começam ${lead()} meses depois)</span></h3>${box(v1, 'v1Pub')}</div>
     <div class="box v2"><h3>Publicar vídeo 2 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos rolando neste mês)</span></h3>${box(v2, 'v2Pub')}</div>`;
 }
 
+function postChipHTML(c, pk) {
+  const n = pk === 'v1Post' ? 1 : 2, done = c[pk === 'v1Post' ? 'v1Pub' : 'v2Pub'];
+  return `<div class="chip post v${n} ${done ? 'done' : ''}" draggable="true" data-id="${c.id}" data-post="${pk}" data-edit="${c.id}" title="Postar vídeo ${n}: ${esc(c.name)}${done ? ' (publicado)' : ''}">
+    ${avatarHTML(coordById(c.coordId), 'xs')}<div class="t"><b>${done ? '✓ ' : ''}Postar vídeo ${n}</b><span>${esc(c.name)}</span></div></div>`;
+}
+
 function chipHTML(c) {
   const co = coordById(c.coordId);
   const dl = deadlineOf(c);
-  const late = dl && pd(c.recordDate) > dl && c.status !== 'gravado';
-  return `<div class="chip ${c.status === 'gravado' ? 'gravado' : ''} ${late ? 'late' : ''}" draggable="true" data-id="${c.id}" data-edit="${c.id}" title="${esc(c.name)}${c.teacher ? ' — ' + esc(c.teacher) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${late ? ' (depois do prazo!)' : ''}">
+  const late = dl && pd(c.recordDate) > dl && !recorded(c);
+  return `<div class="chip ${recorded(c) ? 'gravado' : ''} ${late ? 'late' : ''}" draggable="true" data-id="${c.id}" data-edit="${c.id}" title="${esc(c.name)}${c.teacher ? ' — ' + esc(c.teacher) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${late ? ' (depois do prazo!)' : ''}">
     ${avatarHTML(co, 'xs')}<div class="t"><b>${c.recordTime ? esc(c.recordTime) + ' · ' : ''}${esc(c.name)}</b><span>${esc(c.teacher || co?.name || '')}</span></div></div>`;
 }
 
-const STATUS = { a_contatar: 'A contatar', contatado: 'Contatado', agendado: 'Agendado', gravado: 'Gravado', cancelado: 'Cancelado' };
+const STATUS = { a_contatar: 'A contatar', contatado: 'Contatado', agendado: 'Agendado', gravado: 'Gravado (falta editar)', editado: 'Editado e pronto', cancelado: 'Cancelado' };
 function renderList() {
   document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === UI.view));
   $('#calView').classList.toggle('hidden', UI.view !== 'cal');
@@ -691,8 +719,8 @@ function renderList() {
       <td>${fmt(c.start)}</td><td>${deadlineOf(c) ? fmt(iso(deadlineOf(c))) : '—'}</td>
       <td>${c.recordDate ? fmt(c.recordDate) + (c.recordTime ? ' ' + esc(c.recordTime) : '') : u.tag}</td>
       <td>${esc(c.teacher || '—')}</td><td style="white-space:nowrap">${c.phone ? esc(c.phone) : '—'}</td><td>${STATUS[c.status] || ''}</td>
-      <td>${a ? `<span class="tag v1">${c.v1Pub ? '✓ ' : ''}${MES3[a.getMonth()]}/${String(a.getFullYear()).slice(2)}</span>` : ''}</td>
-      <td>${b ? `<span class="tag v2">${c.v2Pub ? '✓ ' : ''}${MES3[b.getMonth()]}/${String(b.getFullYear()).slice(2)}</span>` : ''}</td></tr>`; }).join('')}
+      <td>${a ? `<span class="tag v1">${c.v1Pub ? '✓ ' : ''}${c.v1Post ? fmt(c.v1Post) : MES3[a.getMonth()] + '/' + String(a.getFullYear()).slice(2)}</span>` : ''}</td>
+      <td>${b ? `<span class="tag v2">${c.v2Pub ? '✓ ' : ''}${c.v2Post ? fmt(c.v2Post) : MES3[b.getMonth()] + '/' + String(b.getFullYear()).slice(2)}</span>` : ''}</td></tr>`; }).join('')}
     </tbody></table>` : '<div class="empty">Nenhum curso ainda.</div>';
 }
 
@@ -708,14 +736,14 @@ function renderBanner() {
 }
 
 /* ============ Drag & drop ============ */
-let dragId = null;
+let dragId = null, dragPost = null; // dragPost: 'v1Post' | 'v2Post' quando arrasta um vídeo para postar
 document.addEventListener('dragstart', e => {
   const el = e.target.closest?.('[draggable="true"][data-id]'); if (!el) return;
-  dragId = el.dataset.id; el.classList.add('dragging');
+  dragId = el.dataset.id; dragPost = el.dataset.post || null; el.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId);
 });
-document.addEventListener('dragend', e => { e.target.classList?.remove('dragging'); dragId = null; document.querySelectorAll('.drop-hover').forEach(x => x.classList.remove('drop-hover')); });
-function dropTarget(e) { return e.target.closest?.('.day[data-date]') || e.target.closest?.('#sideBody'); }
+document.addEventListener('dragend', e => { e.target.classList?.remove('dragging'); dragId = null; dragPost = null; document.querySelectorAll('.drop-hover').forEach(x => x.classList.remove('drop-hover')); });
+function dropTarget(e) { return e.target.closest?.('.day[data-date]') || (dragPost ? e.target.closest?.('#release') : e.target.closest?.('#sideBody')); }
 document.addEventListener('dragover', e => {
   if (!dragId) return; const t = dropTarget(e); if (!t) return;
   e.preventDefault(); e.dataTransfer.dropEffect = 'move';
@@ -726,15 +754,21 @@ document.addEventListener('drop', e => {
   if (!dragId) return; const t = dropTarget(e); if (!t) return;
   e.preventDefault();
   const c = S.courses.find(x => x.id === dragId); if (!c) return;
+  if (dragPost) { // data de postar o vídeo 1/2
+    const n = dragPost === 'v1Post' ? 1 : 2;
+    c[dragPost] = t.dataset.date || '';
+    toast(c[dragPost] ? `Vídeo ${n} de ${c.name}: postar em ${fmt(c[dragPost])}.` : `Data de postar o vídeo ${n} removida.`);
+    save(); render(); return;
+  }
   if (t.dataset.date) {
     c.recordDate = t.dataset.date;
-    if (c.status !== 'gravado') c.status = 'agendado';
+    if (!recorded(c)) c.status = 'agendado';
     c.flagNew = false;
     const dl = deadlineOf(c);
     toast(dl && pd(c.recordDate) > dl ? `Atenção: ${fmt(c.recordDate)} é depois do prazo (${fmt(iso(dl))}).` : `${c.name} agendado para ${fmt(c.recordDate)}.`);
   } else {
     c.recordDate = ''; c.recordTime = '';
-    if (c.status === 'agendado' || c.status === 'gravado') c.status = c.teacher ? 'contatado' : 'a_contatar';
+    if (c.status === 'agendado') c.status = c.teacher ? 'contatado' : 'a_contatar';
     toast('Gravação desmarcada.');
   }
   save(); render();
@@ -792,6 +826,7 @@ function openCourse(id) {
   fillCoordSelect($('#cCoord'), c?.coordId);
   $('#cTeacher').value = c?.teacher || '';
   $('#cPhone').value = c?.phone || '';
+  $('#cP1').value = c?.v1Post || ''; $('#cP2').value = c?.v2Post || '';
   $('#cStart').value = c?.start || '';
   $('#cEnd').value = c?.end || '';
   $('#cRec').value = c?.recordDate || '';
@@ -822,7 +857,7 @@ $('#cSave').onclick = () => {
   let c = editing ? S.courses.find(x => x.id === editing) : null;
   if (!c) { c = { id: uid(), createdAt: iso(todayD()) }; S.courses.push(c); }
   Object.assign(c, {
-    name, coordId: $('#cCoord').value === '__new' ? '' : $('#cCoord').value, teacher: $('#cTeacher').value.trim(), phone: $('#cPhone').value.trim(),
+    name, coordId: $('#cCoord').value === '__new' ? '' : $('#cCoord').value, teacher: $('#cTeacher').value.trim(), phone: $('#cPhone').value.trim(), v1Post: $('#cP1').value, v2Post: $('#cP2').value,
     start: $('#cStart').value, end: $('#cEnd').value, recordDate: $('#cRec').value, recordTime: $('#cTime').value,
     status: $('#cStatus').value, v1Pub: $('#cV1').checked, v2Pub: $('#cV2').checked, notes: $('#cNotes').value.trim(), flagNew: false
   });
