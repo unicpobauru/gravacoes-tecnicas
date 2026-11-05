@@ -994,8 +994,12 @@ function showDiff(cursos, source) {
     const n = norm(r.nome), cn = norm(r.coordenador);
     // a turma (T35, T377…) é a identidade do curso: se existir, casa só por ela
     const tr = turma(r.nome) || turma(r.observacao);
-    const cands = tr ? pool.filter(c => !used.has(c.id) && turma(c.name) === tr)
-                     : pool.filter(c => !used.has(c.id) && norm(c.name) === n);
+    // nas especializações o número se repete entre cursos (AOF T35 × Prótesis T35), então turma + coordenador
+    let cands = tr ? pool.filter(c => !used.has(c.id) && turma(c.name) === tr)
+                   : pool.filter(c => !used.has(c.id) && norm(c.name) === n);
+    const rc = findCoord(r.coordenador);
+    if (tr && cands.length && rc) cands = cands.filter(c => c.coordId === rc.id);
+    if (tr && cands.length > 1) { const w = n.split(' ').filter(x => x.length > 3 && !/^t\d+$/.test(x)); cands = cands.filter(c => w.some(x => norm(c.name).includes(x))); }
     let m = cands.find(c => norm(coordById(c.coordId)?.name) === cn || findCoord(r.coordenador)?.id === c.coordId) || (cands.length === 1 ? cands[0] : null);
     if (!m && cands.length > 1) m = cands.sort((a, b) => Math.abs(pd(a.start) - pd(r.data_inicio)) - Math.abs(pd(b.start) - pd(r.data_inicio)))[0];
     if (!m) { added.push(r); continue; }
