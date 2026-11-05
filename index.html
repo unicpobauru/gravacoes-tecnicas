@@ -79,6 +79,10 @@ button{cursor:pointer}
 .seg button{border:0;background:var(--surface);padding:4px 10px;font-size:12.5px;color:var(--text-2)}
 .seg button.on{background:var(--surface-2);color:var(--text);font-weight:600}
 .coord-group{margin-bottom:14px}
+.side-sort{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
+.month-head{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);padding:6px 2px;display:flex;justify-content:space-between}
+.month-head .n{color:var(--muted);font-weight:600}
+.card .who-line{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2);margin-bottom:4px}
 .coord-head{display:flex;align-items:center;gap:8px;padding:4px 2px 6px}
 .coord-head .nm{font-weight:600;font-size:13px}
 .coord-head .sub{font-size:11.5px;color:var(--muted)}
@@ -231,6 +235,12 @@ td .who{display:flex;align-items:center;gap:7px}
       <div class="seg" id="sideFilter">
         <button data-f="pend" class="on">Sem data</button>
         <button data-f="all">Todos</button>
+      </div>
+    </div>
+    <div class="side-sort"><span>Organizar:</span>
+      <div class="seg" id="sideGroup">
+        <button data-g="prazo">Por prazo</button>
+        <button data-g="coord">Por coordenador</button>
       </div>
     </div>
     <div class="side-body" id="sideBody"></div>
@@ -411,7 +421,7 @@ const safeSet = (k, v) => { try { localStorage.setItem(k, v); return true; } cat
 
 const blank = () => ({ version: 1, coordinators: [], courses: [], imports: [], settings: { leadMonths: 3 } });
 let S = (() => { try { return Object.assign(blank(), JSON.parse(safeGet(KEY)) || {}); } catch { return blank(); } })();
-let UI = (() => { try { return Object.assign({ filter: 'pend', view: 'cal' }, JSON.parse(safeGet(KEY_UI)) || {}); } catch { return { filter: 'pend', view: 'cal' }; } })();
+let UI = (() => { try { return Object.assign({ filter: 'pend', view: 'cal', group: 'prazo' }, JSON.parse(safeGet(KEY_UI)) || {}); } catch { return { filter: 'pend', view: 'cal', group: 'prazo' }; } })();
 function save() {
   if (!safeSet(KEY, JSON.stringify(S))) toast('Não consegui salvar no navegador (armazenamento cheio?). Baixe um backup.');
   schedulePush();
@@ -467,7 +477,7 @@ document.addEventListener('click', e => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && sheetUrl() && remoteReady && !dirty && !pushing && !document.querySelector('.modal-bg.open')) pull();
 });
-function saveUI() { safeSet(KEY_UI, JSON.stringify({ filter: UI.filter, view: UI.view })); }
+function saveUI() { safeSet(KEY_UI, JSON.stringify({ filter: UI.filter, view: UI.view, group: UI.group })); }
 const theme = safeGet('gravacoes-unicpo-theme');
 if (theme) document.documentElement.dataset.theme = theme;
 
@@ -559,10 +569,23 @@ function renderSide() {
     body.innerHTML = `<div class="empty">${S.courses.length ? 'Tudo agendado por aqui.' : 'Suba a PNG do cronograma para ver os cursos que precisam de vídeo técnico.'}</div>`;
     return;
   }
+  document.querySelectorAll('#sideGroup button').forEach(b => b.classList.toggle('on', b.dataset.g === UI.group));
+  const byDl = (a, b) => (deadlineOf(a)?.getTime() ?? Infinity) - (deadlineOf(b)?.getTime() ?? Infinity) || 0; // sem data vai pro fim
+  if (UI.group !== 'coord') {
+    // lista única, do prazo mais próximo para o mais distante, separada por mês do prazo
+    const months = new Map();
+    for (const c of [...list].sort(byDl)) {
+      const dl = deadlineOf(c);
+      const k = dl ? `Gravar até ${MESES[dl.getMonth()]}/${dl.getFullYear()}` : 'Sem turma prevista';
+      if (!months.has(k)) months.set(k, []); months.get(k).push(c);
+    }
+    body.innerHTML = [...months.entries()].map(([k, arr]) =>
+      `<div class="coord-group"><div class="month-head"><span>${k}</span><span class="n">${arr.length}</span></div>${arr.map(c => cardHTML(c, true)).join('')}</div>`).join('');
+    return;
+  }
   // agrupa por coordenador
   const groups = new Map();
   for (const c of list) { const k = c.coordId || '_'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
-  const byDl = (a, b) => (deadlineOf(a)?.getTime() ?? Infinity) - (deadlineOf(b)?.getTime() ?? Infinity) || 0; // sem data vai pro fim
   const ordered = [...groups.entries()].map(([k, arr]) => [k, arr.sort(byDl)]).sort((a, b) => byDl(a[1][0], b[1][0]));
   body.innerHTML = ordered.map(([k, arr]) => {
     const co = coordById(k);
@@ -573,7 +596,7 @@ function renderSide() {
   }).join('');
 }
 
-function cardHTML(c) {
+function cardHTML(c, showCoord = false) {
   const u = urgency(c);
   const co = coordById(c.coordId);
   const isNew = c.flagNew ? '<span class="tag new">Novo</span>' : '';
@@ -581,6 +604,7 @@ function cardHTML(c) {
   const v1 = v1Month(c);
   return `<div class="card ${u.cls}" draggable="true" data-id="${c.id}">
     <div class="row1">${avatarHTML(co, 'xs')}<div class="title">${esc(c.name)}</div><button class="edit-btn" data-edit="${c.id}" title="Editar">✎</button></div>
+    ${showCoord ? `<div class="meta"><span>${esc(co?.name || 'Sem coordenador')}</span></div>` : ''}
     <div class="meta"><span>Início ${fmt(c.start)}</span>${v1 ? `<span>Vídeo 1 em ${MES3[v1.getMonth()]}/${String(v1.getFullYear()).slice(2)}</span>` : ''}</div>
     <div class="meta">${u.tag}${isNew}${isChg}</div>
     <input class="teacher" data-teacher="${c.id}" value="${esc(c.teacher || '')}" placeholder="Quem vai gravar?">
@@ -736,6 +760,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.matches('.teacher')) e.target.blur();
   if (e.key === 'Escape') document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
 });
+$('#sideGroup').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; UI.group = b.dataset.g; saveUI(); renderSide(); });
 $('#sideFilter').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; UI.filter = b.dataset.f; saveUI(); renderSide(); });
 $('#viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; UI.view = b.dataset.v; saveUI(); renderList(); });
 $('#prevM').onclick = () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1); renderCal(); };
