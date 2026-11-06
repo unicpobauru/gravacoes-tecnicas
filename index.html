@@ -79,6 +79,9 @@ button{cursor:pointer}
 .seg button{border:0;background:var(--surface);padding:4px 10px;font-size:12.5px;color:var(--text-2)}
 .seg button.on{background:var(--surface-2);color:var(--text);font-weight:600}
 .coord-group{margin-bottom:14px}
+.side-search{padding:8px 10px 0}
+.side-search input{width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--text)}
+.side-search input:focus{outline:2px solid var(--accent);border-color:transparent}
 .side-sort{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted)}
 .month-head{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);padding:6px 2px;display:flex;justify-content:space-between}
 .month-head .n{color:var(--muted);font-weight:600}
@@ -255,6 +258,7 @@ td .who{display:flex;align-items:center;gap:7px}
         <button data-g="coord">Por coordenador</button>
       </div>
     </div>
+    <div class="side-search"><input type="search" id="sideSearch" placeholder="🔎 Buscar curso ou coordenador…" autocomplete="off"></div>
     <div class="side-body" id="sideBody"></div>
   </aside>
 
@@ -589,9 +593,12 @@ function renderSide() {
   if (UI.filter === 'pend') list = list.filter(c => !c.recordDate && !recorded(c));
   else if (UI.filter === 'ready') list = activeCourses().filter(c => c.status === 'editado' && nextVideo(c));
   else list = list.filter(c => c.status !== 'editado');
+  // busca por curso, coordenador ou quem grava (sem acento, sem "Dr.")
+  const q = norm($('#sideSearch').value);
+  if (q) list = list.filter(c => norm(`${c.name} ${coordById(c.coordId)?.name || ''} ${c.teacher || ''}`).includes(q));
   $('#pendCount').textContent = activeCourses().filter(c => !c.recordDate && !recorded(c) && (!c.start || ym(pd(c.start)) >= t0)).length;
   if (!list.length) {
-    body.innerHTML = `<div class="empty">${!S.courses.length ? 'Suba a PNG do cronograma para ver os cursos que precisam de vídeo técnico.' : UI.filter === 'ready' ? 'Nenhum vídeo editado esperando para postar.' : 'Tudo agendado por aqui.'}</div>`;
+    body.innerHTML = `<div class="empty">${!S.courses.length ? 'Suba a PNG do cronograma para ver os cursos que precisam de vídeo técnico.' : q ? `Nada encontrado para “${esc($('#sideSearch').value.trim())}” neste filtro.` : UI.filter === 'ready' ? 'Nenhum vídeo editado esperando para postar.' : 'Tudo agendado por aqui.'}</div>`;
     return;
   }
   if (UI.filter === 'ready') {
@@ -826,6 +833,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.matches('.teacher')) e.target.blur();
   if (e.key === 'Escape') document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
 });
+$('#sideSearch').addEventListener('input', () => renderSide());
 $('#sideGroup').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; UI.group = b.dataset.g; saveUI(); renderSide(); });
 $('#sideFilter').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; UI.filter = b.dataset.f; saveUI(); renderSide(); });
 $('#viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; UI.view = b.dataset.v; saveUI(); renderList(); });
