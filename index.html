@@ -354,13 +354,13 @@ td .who{display:flex;align-items:center;gap:7px}
           </select>
         </div>
         <div class="field"><label>Publicações</label>
-          <label style="font-weight:500;display:flex;gap:6px;align-items:center"><input type="checkbox" id="cV1"> Vídeo 1 publicado <span class="tag v1" id="cV1m"></span></label>
-          <label style="font-weight:500;display:flex;gap:6px;align-items:center"><input type="checkbox" id="cV2"> Vídeo 2 publicado <span class="tag v2" id="cV2m"></span></label>
+          <label style="font-weight:500;display:flex;gap:6px;align-items:center"><input type="checkbox" id="cV1"> 1ª postagem publicada <span class="tag v1" id="cV1m"></span></label>
+          <label style="font-weight:500;display:flex;gap:6px;align-items:center"><input type="checkbox" id="cV2"> 2ª postagem publicada <span class="tag v2" id="cV2m"></span></label>
         </div>
       </div>
       <div class="row">
-        <div class="field"><label>Postar vídeo 1 em</label><input type="date" id="cP1"></div>
-        <div class="field"><label>Postar vídeo 2 em</label><input type="date" id="cP2"></div>
+        <div class="field"><label>Data da 1ª postagem</label><input type="date" id="cP1"></div>
+        <div class="field"><label>Data da 2ª postagem</label><input type="date" id="cP2"></div>
       </div>
       <div class="field"><label>Anotações</label><textarea id="cNotes" style="font-family:inherit;min-height:60px"></textarea></div>
       <div class="hint" id="cInfo"></div>
@@ -420,7 +420,7 @@ td .who{display:flex;align-items:center;gap:7px}
       </div>
       <p class="hint">Com o link, tudo é salvo automaticamente na Planilha Google e aparece igual em qualquer computador. Para os professores, mande o link do site com <code>?planilha=</code> + este link no final.</p>
       <div class="row">
-        <div class="field"><label>Meses antes do curso para o vídeo 1</label><input type="number" id="leadMonths" min="1" max="6"></div>
+        <div class="field"><label>Meses antes do curso para a 1ª postagem</label><input type="number" id="leadMonths" min="1" max="6"></div>
         <div class="field"><label>Tema</label>
           <select id="themeSel"><option value="">Automático</option><option value="light">Claro</option><option value="dark">Escuro</option></select>
         </div>
@@ -523,7 +523,7 @@ const initials = n => norm(n).split(' ').filter(Boolean).slice(0, 2).map(w => w[
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3200); }
 
 const lead = () => Number(S.settings.leadMonths) || 3;
-// Prazo para gravar = data em que o vídeo 1 precisa sair (início do curso − N meses)
+// Prazo para gravar = data em que a 1ª postagem precisa sair (início do curso − N meses)
 const deadlineOf = c => c.start ? addMonths(pd(c.start), -lead()) : null;
 const v1Month = c => c.start ? addMonths(new Date(pd(c.start).getFullYear(), pd(c.start).getMonth(), 1), -lead()) : null;
 const v2Month = c => c.start ? new Date(pd(c.start).getFullYear(), pd(c.start).getMonth(), 1) : null;
@@ -607,7 +607,7 @@ function renderSide() {
     const groups = new Map();
     for (const c of [...list].sort((a, b) => (when(a)?.getTime() ?? Infinity) - (when(b)?.getTime() ?? Infinity) || 0)) {
       const w = when(c), n = nextVideo(c);
-      const k = w ? `Vídeo ${n} sai em ${MESES[w.getMonth()]}/${w.getFullYear()}` : 'Sem data de postagem';
+      const k = w ? `${n}ª postagem em ${MESES[w.getMonth()]}/${w.getFullYear()}` : 'Sem data de postagem';
       if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c);
     }
     body.innerHTML = [...groups.entries()].map(([k, arr]) =>
@@ -650,7 +650,7 @@ function cardHTML(c, showCoord = false) {
   return `<div class="card ${u.cls}" draggable="true" data-id="${c.id}">
     <div class="row1">${avatarHTML(co, 'xs')}<div class="title">${esc(c.name)}</div><button class="edit-btn" data-edit="${c.id}" title="Editar">✎</button></div>
     ${showCoord ? `<div class="meta"><span>${esc(co?.name || 'Sem coordenador')}</span></div>` : ''}
-    <div class="meta"><span>Início ${fmt(c.start)}</span>${v1 ? `<span>Vídeo 1 em ${MES3[v1.getMonth()]}/${String(v1.getFullYear()).slice(2)}</span>` : ''}</div>
+    <div class="meta"><span>Início ${fmt(c.start)}</span>${v1 ? `<span>1ª postagem ${MES3[v1.getMonth()]}/${String(v1.getFullYear()).slice(2)}</span>` : ''}</div>
     <div class="meta">${u.tag}${isNew}${isChg}</div>
     <input class="teacher" data-teacher="${c.id}" value="${esc(c.teacher || '')}" placeholder="Quem vai gravar?">
     <div class="phone-row"><input class="teacher" type="tel" inputmode="tel" data-phone="${c.id}" value="${esc(c.phone || '')}" placeholder="Telefone">${phoneLinks(c.phone)}</div>
@@ -714,14 +714,14 @@ function renderCal() {
     return grp.filter(g => g[1].length).map(([t, a]) => `<div class="sub-h">${t} (${a.length})</div>${a.map(c => item(c, key)).join('')}`).join('');
   };
   $('#release').innerHTML = `
-    <div class="box v1"><h3>Publicar vídeo 1 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos que começam ${lead()} meses depois)</span></h3>${box(v1, 'v1Pub')}</div>
-    <div class="box v2"><h3>Publicar vídeo 2 em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos rolando neste mês)</span></h3>${box(v2, 'v2Pub')}</div>`;
+    <div class="box v1"><h3>1ª postagem em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos que começam ${lead()} meses depois)</span></h3>${box(v1, 'v1Pub')}</div>
+    <div class="box v2"><h3>2ª postagem em ${MESES[cursor.getMonth()]} <span style="font-weight:500">(cursos que começam neste mês)</span></h3>${box(v2, 'v2Pub')}</div>`;
 }
 
 function postChipHTML(c, pk) {
   const n = pk === 'v1Post' ? 1 : 2, done = c[pk === 'v1Post' ? 'v1Pub' : 'v2Pub'];
-  return `<div class="chip post v${n} ${done ? 'done' : ''}" draggable="true" data-id="${c.id}" data-post="${pk}" data-edit="${c.id}" title="Postar vídeo ${n}: ${esc(c.name)}${done ? ' (publicado)' : ''}">
-    ${avatarHTML(coordById(c.coordId), 'xs')}<div class="t"><b>${done ? '✓ ' : ''}Postar vídeo ${n}</b><span>${esc(c.name)}</span></div></div>`;
+  return `<div class="chip post v${n} ${done ? 'done' : ''}" draggable="true" data-id="${c.id}" data-post="${pk}" data-edit="${c.id}" title="${n}ª postagem: ${esc(c.name)}${done ? ' (publicado)' : ''}">
+    ${avatarHTML(coordById(c.coordId), 'xs')}<div class="t"><b>${done ? '✓ ' : ''}${n}ª postagem</b><span>${esc(c.name)}</span></div></div>`;
 }
 
 function chipHTML(c) {
@@ -740,7 +740,7 @@ function renderList() {
   $('#prevM').disabled = $('#nextM').disabled = $('#todayBtn').disabled = UI.view !== 'cal';
   if (UI.view !== 'list') return;
   const rows = S.courses.filter(c => !expired(c)).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-  $('#listView').innerHTML = rows.length ? `<table><thead><tr><th>Curso</th><th>Coordenador</th><th>Início</th><th>Prazo gravar</th><th>Gravação</th><th>Quem grava</th><th>Telefone</th><th>Status</th><th>Vídeo 1</th><th>Vídeo 2</th></tr></thead><tbody>
+  $('#listView').innerHTML = rows.length ? `<table><thead><tr><th>Curso</th><th>Coordenador</th><th>Início</th><th>Prazo gravar</th><th>Gravação</th><th>Quem grava</th><th>Telefone</th><th>Status</th><th>1ª postagem</th><th>2ª postagem</th></tr></thead><tbody>
     ${rows.map(c => { const co = coordById(c.coordId); const u = urgency(c); const a = v1Month(c), b = v2Month(c);
       return `<tr class="${c.status === 'cancelado' ? 'removed' : ''}" data-edit="${c.id}" style="cursor:pointer">
       <td><b>${esc(c.name)}</b></td><td><div class="who">${avatarHTML(co, 'xs')}${esc(co?.name || '—')}</div></td>
@@ -782,10 +782,10 @@ document.addEventListener('drop', e => {
   if (!dragId) return; const t = dropTarget(e); if (!t) return;
   e.preventDefault();
   const c = S.courses.find(x => x.id === dragId); if (!c) return;
-  if (dragPost) { // data de postar o vídeo 1/2
+  if (dragPost) { // data da 1ª/2ª postagem
     const n = dragPost === 'v1Post' ? 1 : 2;
     c[dragPost] = t.dataset.date || '';
-    toast(c[dragPost] ? `Vídeo ${n} de ${c.name}: postar em ${fmt(c[dragPost])}.` : `Data de postar o vídeo ${n} removida.`);
+    toast(c[dragPost] ? `${n}ª postagem de ${c.name}: ${fmt(c[dragPost])}.` : `Data da ${n}ª postagem removida.`);
     save(); render(); return;
   }
   if (t.dataset.date) {
@@ -872,7 +872,7 @@ function updateCourseInfo() {
   const dl = deadlineOf(tmp), a = v1Month(tmp), b = v2Month(tmp);
   $('#cV1m').textContent = a ? `${MES3[a.getMonth()]}/${a.getFullYear()}` : '';
   $('#cV2m').textContent = b ? `${MES3[b.getMonth()]}/${b.getFullYear()}` : '';
-  $('#cInfo').textContent = dl ? `Gravar até ${fmt(iso(dl))} — vídeo 1 sai em ${monthLabel(a)} e vídeo 2 em ${monthLabel(b)}.` : '';
+  $('#cInfo').textContent = dl ? `Gravar até ${fmt(iso(dl))} — 1ª postagem em ${monthLabel(a)} e 2ª em ${monthLabel(b)}.` : '';
 }
 $('#cStart').addEventListener('input', updateCourseInfo);
 $('#cCoord').addEventListener('change', e => {

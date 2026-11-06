@@ -9,7 +9,7 @@ Site: https://unicpobauru.github.io/gravacoes-tecnicas/ (os dados ficam na Plani
 2. O Claude lê a imagem e mostra: cursos **novos** (precisa gravar), cursos que **mudaram de data** e cursos que **saíram** do cronograma. Você revisa e aplica.
 3. Cada curso vira uma caixinha na coluna **A gravar**, agrupada por coordenador (com foto).
 4. Escreva na caixinha quem vai gravar e **arraste para o dia marcado** no calendário.
-5. O calendário mostra, mês a mês, quais cursos têm o **vídeo 1** a publicar (3 meses antes do início) e o **vídeo 2** (no mês do curso).
+5. O calendário mostra, mês a mês, quais cursos têm a **1ª postagem** (3 meses antes do início) e a **2ª postagem** (no mês do curso). Os dois vídeos são gravados juntos e não têm ordem: qualquer um pode sair primeiro.
 
 ## Dados
 - Ficam salvos no navegador (localStorage). Use **Backup** para baixar/restaurar um `.json`.

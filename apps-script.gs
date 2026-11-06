@@ -43,7 +43,7 @@ function doPost(e) {
     const nome = {};
     (S.coordinators || []).forEach(c => nome[c.id] = c.name);
     const STATUS = { a_contatar: 'A contatar', contatado: 'Contatado', agendado: 'Agendado', gravado: 'Gravado (falta editar)', editado: 'Editado e pronto', cancelado: 'Cancelado' };
-    const linhas = [['Curso', 'Coordenador', 'Início do curso', 'Quem grava', 'Telefone', 'Data da gravação', 'Status', 'Postar vídeo 1 em', 'Vídeo 1 publicado', 'Postar vídeo 2 em', 'Vídeo 2 publicado', 'Observações']];
+    const linhas = [['Curso', 'Coordenador', 'Início do curso', 'Quem grava', 'Telefone', 'Data da gravação', 'Status', 'Data da 1ª postagem', '1ª postagem publicada', 'Data da 2ª postagem', '2ª postagem publicada', 'Observações']];
     (S.courses || []).slice()
       .sort((a, b) => String(a.start || '').localeCompare(String(b.start || '')))
       .forEach(c => linhas.push([
