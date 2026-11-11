@@ -1001,7 +1001,6 @@ $('#importTabs').addEventListener('click', e => {
   document.querySelectorAll('#importTabs button').forEach(x => x.classList.toggle('on', x === b));
   $('#tabImg').classList.toggle('hidden', b.dataset.t !== 'img'); $('#tabJson').classList.toggle('hidden', b.dataset.t !== 'json');
 });
-$('#goSettings').onclick = e => { e.preventDefault(); $('#mImport').classList.remove('open'); openSettings(); };
 const dz = $('#dropZone');
 dz.onclick = () => $('#fileInput').click();
 dz.addEventListener('dragover', e => { if (dragId) return; e.preventDefault(); dz.classList.add('drop-hover'); });
