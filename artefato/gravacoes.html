@@ -119,6 +119,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .tag.v2{background:var(--v2-soft);color:var(--v2)}
 .edit-btn{border:0;background:none;color:var(--muted);padding:0 2px;font-size:15px;line-height:1}
 .edit-btn:hover{color:var(--text)}
+.crea-btn{border:0;background:none;color:var(--muted);padding:0 2px;line-height:1;display:inline-flex}
+.crea-btn svg{width:15px;height:15px}
+.crea-btn:hover{color:var(--text)}
+.crea-btn.has{color:var(--good)}
+.crea-btn.has svg{fill:var(--good-soft)}
+#crText{width:100%;min-height:260px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface);font:inherit;line-height:1.5;resize:vertical}
 
 /* Calendar */
 .cal-h{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
@@ -376,6 +382,20 @@ td .who{display:flex;align-items:center;gap:7px}
       <input type="file" id="coordFile" accept="image/*" class="hidden">
     </div>
     <div class="modal-f"><button class="btn primary" data-close>Pronto</button></div>
+  </div>
+</div>
+
+<!-- Criativos (tráfego) -->
+<div class="modal-bg" id="mCreative">
+  <div class="modal">
+    <div class="modal-h"><h3 id="crTitle">Criativos</h3><button class="edit-btn" data-close>✕</button></div>
+    <div class="modal-b">
+      <p class="hint" style="margin-top:0">Espaço do time de tráfego: escreva aqui os criativos que precisa para este curso (textos, ideias, formatos, prazos). Quando houver texto, o papelzinho fica verde na caixinha.</p>
+      <label for="crText" class="hidden">Criativos</label>
+      <textarea id="crText" placeholder="Ex.: 3 reels de 30s com o coordenador explicando a técnica; carrossel com antes e depois; legenda com chamada para a turma…"></textarea>
+      <div class="hint" id="crMeta" style="margin-bottom:0"></div>
+    </div>
+    <div class="modal-f"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="crSave">Salvar criativos</button></div>
   </div>
 </div>
 
@@ -691,7 +711,7 @@ function cardHTML(c, showCoord = false) {
   const isChg = c.flagChanged ? `<span class="tag chg" title="${esc(c.flagChanged)}">Data mudou</span>` : '';
   const v1 = v1Month(c);
   return `<div class="card ${u.cls}" draggable="true" data-id="${c.id}">
-    <div class="row1">${avatarHTML(co, 'xs')}<div class="title">${esc(c.name)}</div><button class="edit-btn" data-edit="${c.id}" title="Editar">✎</button></div>
+    <div class="row1">${avatarHTML(co, 'xs')}<div class="title">${esc(c.name)}</div><button class="edit-btn" data-edit="${c.id}" title="Editar">✎</button><button class="crea-btn ${(c.creative || '').trim() ? 'has' : ''}" data-creative="${c.id}" title="${(c.creative || '').trim() ? 'Criativos escritos (abrir)' : 'Criativos: o tráfego escreve aqui'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/></svg></button></div>
     ${showCoord ? `<div class="meta"><span>${esc(co?.name || 'Sem coordenador')}</span></div>` : ''}
     <div class="meta"><span>Início ${fmt(c.start)}</span>${v1 ? `<span>1ª postagem ${MES3[v1.getMonth()]}/${String(v1.getFullYear()).slice(2)}</span>` : ''}</div>
     <div class="meta">${u.tag}${isNew}${isChg}</div>
@@ -847,6 +867,8 @@ document.addEventListener('drop', e => {
 
 /* ============ Events ============ */
 document.addEventListener('click', e => {
+  const cr = e.target.closest('[data-creative]');
+  if (cr) { openCreative(cr.dataset.creative); return; }
   const ed = e.target.closest('[data-edit]');
   if (ed && !e.target.closest('input')) { openCourse(ed.dataset.edit); return; }
   if (e.target.closest('[data-close]')) { e.target.closest('.modal-bg').classList.remove('open'); return; }
@@ -890,6 +912,25 @@ let editing = null;
 function fillCoordSelect(sel, selected) {
   sel.innerHTML = `<option value="">— sem coordenador —</option>` + [...S.coordinators].sort((a, b) => a.name.localeCompare(b.name)).map(c => `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('') + `<option value="__new">+ novo coordenador…</option>`;
 }
+/* ============ Criativos pedidos pelo tráfego ============ */
+let creativeFor = null;
+function openCreative(id) {
+  const c = S.courses.find(x => x.id === id); if (!c) return;
+  creativeFor = id;
+  $('#crTitle').textContent = 'Criativos · ' + c.name;
+  $('#crText').value = c.creative || '';
+  $('#crMeta').textContent = c.creativeAt ? 'Última alteração em ' + new Date(c.creativeAt).toLocaleString('pt-BR') : '';
+  open('#mCreative');
+  setTimeout(() => $('#crText').focus(), 50);
+}
+$('#crSave').onclick = () => {
+  const c = S.courses.find(x => x.id === creativeFor); if (!c) return;
+  const v = $('#crText').value.trim();
+  if (v !== (c.creative || '')) { c.creative = v; c.creativeAt = new Date().toISOString(); save(); render(); }
+  $('#mCreative').classList.remove('open');
+  toast(v ? 'Criativos salvos.' : 'Criativos apagados.');
+};
+
 function openCourse(id) {
   const c = id ? S.courses.find(x => x.id === id) : null;
   editing = c ? c.id : null;
@@ -1208,12 +1249,12 @@ $('#exportBtn').onclick = () => offerFile(`gravacoes-unicpo-${iso(todayD())}.jso
 $('#csvBtn').onclick = () => {
   const STATUS_TXT = { a_contatar: 'A contatar', contatado: 'Contatado', agendado: 'Agendado', gravado: 'Gravado (falta editar)', editado: 'Editado e pronto', cancelado: 'Cancelado' };
   const cell = v => { v = String(v ?? ''); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-  const rows = [['Curso', 'Coordenador', 'Início do curso', 'Prazo para gravar', 'Quem grava', 'Telefone', 'Data da gravação', 'Status', 'Data da 1ª postagem', '1ª postagem publicada', 'Data da 2ª postagem', '2ª postagem publicada', 'Observações']];
+  const rows = [['Curso', 'Coordenador', 'Início do curso', 'Prazo para gravar', 'Quem grava', 'Telefone', 'Data da gravação', 'Status', 'Data da 1ª postagem', '1ª postagem publicada', 'Data da 2ª postagem', '2ª postagem publicada', 'Observações', 'Criativos (tráfego)']];
   [...S.courses].sort((a, b) => (a.start || '').localeCompare(b.start || '')).forEach(c => {
     const dl = deadlineOf(c);
     rows.push([c.name, coordById(c.coordId)?.name || '', fmt(c.start), dl ? fmt(iso(dl)) : '', c.teacher || '', c.phone || '',
       c.recordDate ? fmt(c.recordDate) + (c.recordTime ? ' ' + c.recordTime : '') : '', STATUS_TXT[c.status] || c.status || '',
-      c.v1Post ? fmt(c.v1Post) : '', c.v1Pub ? 'sim' : '', c.v2Post ? fmt(c.v2Post) : '', c.v2Pub ? 'sim' : '', c.notes || '']);
+      c.v1Post ? fmt(c.v1Post) : '', c.v1Pub ? 'sim' : '', c.v2Post ? fmt(c.v2Post) : '', c.v2Pub ? 'sim' : '', c.notes || '', c.creative || '']);
   });
   offerFile(`gravacoes-unicpo-${iso(todayD())}.csv`, '﻿' + rows.map(r => r.map(cell).join(';')).join('\r\n'));
 };
