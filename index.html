@@ -300,11 +300,11 @@ td .who{display:flex;align-items:center;gap:7px}
       <div id="tabImg">
         <div class="drop-zone" id="dropZone">
           <b>Arraste a PNG aqui ou clique para escolher</b>
-          <div class="hint" style="margin:6px 0 0">A imagem é lida pelo Claude, que lista todos os cursos, coordenadores e datas.</div>
+          <div class="hint" style="margin:6px 0 0">A imagem é lida pelo Gemini (gratuito), que lista os cursos, turmas e datas. O coordenador vem do cadastro.</div>
           <img id="imgPreview" class="hidden" alt="Prévia do cronograma">
         </div>
         <input type="file" id="fileInput" accept="image/*" class="hidden">
-        <div id="noKey" class="hint hidden">Para ler a imagem automaticamente, coloque sua chave da API da Anthropic em <a href="#" id="goSettings">Configurações</a>. Sem chave, use a aba “Colar dados”.</div>
+        <div id="noKey" class="hint hidden">Para ler a imagem automaticamente, coloque uma chave gratuita do Gemini em <a href="#" id="goSettings">Configurações</a> (crie em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>). Sem chave, use a aba “Colar dados”.</div>
         <div id="importStatus" class="hint"></div>
         <div id="importErr" class="err"></div>
       </div>
@@ -410,10 +410,10 @@ td .who{display:flex;align-items:center;gap:7px}
     <div class="modal-h"><h3>Configurações</h3><button class="edit-btn" data-close>✕</button></div>
     <div class="modal-b">
       <div class="field">
-        <label>Chave da API da Anthropic (para ler a PNG)</label>
-        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off">
+        <label>Chave do Gemini (gratuita, para ler a PNG)</label>
+        <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off">
       </div>
-      <p class="hint">A chave fica guardada só neste navegador e não entra no backup. Crie em console.anthropic.com → API Keys. Cada leitura de imagem custa alguns centavos.</p>
+      <p class="hint">A chave fica guardada só neste navegador e não entra no backup. Crie de graça em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (entre com a conta Google → “Create API key”). Cada pessoa que for ler a PNG precisa colocar uma chave no próprio navegador.</p>
       <div class="field">
         <label>Link da planilha (Apps Script, termina em /exec)</label>
         <input type="url" id="sheetUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
@@ -435,7 +435,7 @@ td .who{display:flex;align-items:center;gap:7px}
 <script type="module">
 /* ============ Storage ============ */
 const KEY = 'gravacoes-unicpo-v1';
-const KEY_API = 'gravacoes-unicpo-apikey';
+const KEY_API = 'gravacoes-unicpo-gemini'; // chave gratuita do Google AI Studio
 const KEY_UI = 'gravacoes-unicpo-ui';
 const safeGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const safeSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch { return false; } };
@@ -981,56 +981,98 @@ async function prepImage(file) {
   return { url, type, data: url.split(',')[1] };
 }
 
+/* ============ Leitura da PNG com o Gemini (chave gratuita do Google AI Studio) ============ */
+const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
 const SCHEMA = {
-  type: 'object',
+  type: 'OBJECT',
   properties: {
     cursos: {
-      type: 'array',
+      type: 'ARRAY',
       items: {
-        type: 'object',
+        type: 'OBJECT',
         properties: {
-          nome: { type: 'string', description: 'Nome do curso exatamente como na imagem (inclua turma/cidade se houver)' },
-          coordenador: { type: 'string', description: 'Nome do coordenador ou professor responsável; vazio se não houver' },
-          data_inicio: { type: 'string', description: 'Data de início no formato AAAA-MM-DD' },
-          data_fim: { type: 'string', description: 'Data de término AAAA-MM-DD, ou vazio' },
-          observacao: { type: 'string', description: 'Qualquer detalhe relevante (módulo, local), ou vazio' }
+          tipo: { type: 'STRING', enum: ['Especialización', 'Diplomado'], description: 'Seção da imagem onde o curso está' },
+          nome: { type: 'STRING', description: 'Nome do curso (ver regras), sem "Especialización en"/"Diplomado en" e sem a turma' },
+          turma: { type: 'STRING', description: 'Código da turma, ex.: T35, T377. Vazio se não houver' },
+          data_inicio: { type: 'STRING', description: 'Fecha de inicio no formato AAAA-MM-DD' }
         },
-        required: ['nome', 'coordenador', 'data_inicio', 'data_fim', 'observacao'],
-        additionalProperties: false
+        required: ['tipo', 'nome', 'turma', 'data_inicio']
       }
     }
   },
-  required: ['cursos'],
-  additionalProperties: false
+  required: ['cursos']
 };
 
-async function readWithClaude(img) {
-  const apiKey = safeGet(KEY_API);
-  if (!apiKey) throw new Error('Sem chave da API. Coloque em Configurações ou use a aba “Colar dados”.');
-  const { default: Anthropic } = await import('https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.0.0/+esm');
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-  const known = S.coordinators.map(c => c.name).join('; ');
-  const prompt = `Esta imagem é o cronograma de cursos da UniCPO (pós-graduação/odontologia) para os próximos meses.
-Liste TODOS os cursos que aparecem, um item por curso/turma, com nome, coordenador e data de início (e fim, se houver).
-Hoje é ${iso(todayD())}. Se a imagem não mostrar o ano, use o ano que deixa a data no futuro mais próximo de hoje.
-Se um curso tiver várias datas/módulos, use a PRIMEIRA data como data_inicio e a última como data_fim.
-${known ? `Coordenadores já cadastrados (use exatamente essa grafia quando for a mesma pessoa): ${known}.` : ''}
-Não invente cursos; se algo estiver ilegível, transcreva o que der e explique em observacao.`;
-  const resp = await client.beta.messages.create({
-    model: 'claude-opus-5-5',
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'high', format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [{ role: 'user', content: [
-      { type: 'image', source: { type: 'base64', media_type: img.type, data: img.data } },
-      { type: 'text', text: prompt }
-    ] }]
+async function geminiFetch(path, key, body) {
+  const r = await fetch(`${GEMINI}/${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'x-goog-api-key': key, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined
   });
-  if (resp.stop_reason === 'refusal') throw new Error('O modelo recusou a leitura desta imagem. Tente a aba “Colar dados”.');
-  if (resp.stop_reason === 'max_tokens') throw new Error('A resposta ficou grande demais. Tente cortar a imagem em duas partes.');
-  const txt = resp.content.filter(b => b.type === 'text').map(b => b.text).join('');
-  return JSON.parse(txt).cursos || [];
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const m = j.error?.message || `erro ${r.status}`;
+    if (r.status === 400 && /api key/i.test(m)) throw new Error('A chave do Gemini não é válida. Confira em ⚙ Configurações.');
+    if (r.status === 429) throw new Error('Limite gratuito do Gemini atingido por agora. Espere alguns minutos e tente de novo.');
+    if (r.status === 403) throw new Error('A chave do Gemini não tem permissão. Crie outra em aistudio.google.com/apikey.');
+    throw new Error('Gemini: ' + m);
+  }
+  return j;
+}
+
+// escolhe o modelo "Flash" mais novo que a chave tem disponível (os nomes mudam com o tempo)
+async function pickGeminiModel(key) {
+  const j = await geminiFetch('models?pageSize=200', key);
+  const ok = (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name);
+  const ver = n => Number((n.match(/gemini-(\d+(?:\.\d+)?)/) || [])[1] || 0);
+  const plain = ok.filter(n => /gemini-[\d.]+-flash$/.test(n));
+  const flash = ok.filter(n => /gemini-[\d.]+-flash/.test(n) && !/image|tts|audio|live|thinking-exp/.test(n));
+  const pool = plain.length ? plain : flash.length ? flash : ok.filter(n => /gemini/.test(n));
+  if (!pool.length) throw new Error('Nenhum modelo do Gemini disponível para esta chave.');
+  return pool.sort((a, b) => ver(b) - ver(a))[0];
+}
+
+async function readWithGemini(img) {
+  const key = safeGet(KEY_API);
+  if (!key) throw new Error('Sem chave do Gemini. Coloque em ⚙ Configurações ou use a aba “Colar dados”.');
+  const model = await pickGeminiModel(key);
+  const prompt = `Esta imagem é o cronograma "Conoce nuestros próximos inicios" da UniCPO (odontologia).
+Ela tem duas seções: "Especialización" e "Diplomado". Cada cartão tem uma foto, o nome do curso, a turma (T + número) e "Fecha de inicio" (dd/mm/aaaa).
+Liste TODOS os cartões, um item por cartão, sem pular nenhum e sem inventar.
+Regras do campo nome:
+- "Especialización en Ortodoncia" → "Ortodoncia".
+- "Diplomado en AOF" + "Step One" → "AOF Step One" (a área vem antes do título).
+- "Diplomado en" + "Master implante" → "Master Implante"; "Diplomado" + "Odontop" → "Odontop".
+- Mantenha acentos e escreva com iniciais maiúsculas.
+Datas: converta dd/mm/aaaa para AAAA-MM-DD. Hoje é ${iso(todayD())}.`;
+  const j = await geminiFetch(`${model}:generateContent`, key, {
+    contents: [{ role: 'user', parts: [{ inline_data: { mime_type: img.type, data: img.data } }, { text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0 }
+  });
+  const cand = j.candidates?.[0];
+  if (!cand) throw new Error('O Gemini não respondeu' + (j.promptFeedback?.blockReason ? ` (bloqueado: ${j.promptFeedback.blockReason})` : '') + '. Tente a aba “Colar dados”.');
+  if (cand.finishReason === 'MAX_TOKENS') throw new Error('A resposta ficou grande demais. Tente cortar a imagem em duas partes.');
+  const txt = (cand.content?.parts || []).map(p => p.text || '').join('');
+  let raw; try { raw = JSON.parse(txt).cursos || []; } catch { throw new Error('Não entendi a resposta do Gemini. Tente de novo.'); }
+  return raw.map(toCurso);
+}
+
+// nome-base do curso, para achar o coordenador no cadastro: "Esp. Endodoncia (7 módulos) · T57" → "endodoncia"
+const baseName = n => norm(String(n || '').replace(/^\s*(esp|dipl)\.\s*/i, '').replace(/·.*$/, '').replace(/\(.*?\)/g, ''));
+function toCurso(r) {
+  const esp = /especiali/i.test(r.tipo || '');
+  const tr = turma(r.turma) || (/^\s*\d+\s*$/.test(r.turma || '') ? 'T' + Number(r.turma) : '');
+  const nome = `${esp ? 'Esp.' : 'Dipl.'} ${String(r.nome || '').trim()}${tr ? ' · ' + tr : ''}`;
+  // a PNG não traz o nome do coordenador: usa o que já está cadastrado para o mesmo curso
+  const b = baseName(nome);
+  const same = S.courses.filter(c => c.coordId && /^\s*esp\./i.test(c.name) === esp)
+    .filter(c => { const x = baseName(c.name); return x === b || (x.length > 3 && b.length > 3 && (x.includes(b) || b.includes(x))); });
+  const ids = [...new Set(same.map(c => c.coordId))];
+  let coordenador = '', observacao = '';
+  if (ids.length === 1) coordenador = coordById(ids[0])?.name || '';
+  else if (ids.length > 1) observacao = 'Coordenador a confirmar: ' + ids.map(id => coordById(id)?.name).filter(Boolean).join(' ou ');
+  else observacao = 'Curso novo no cadastro: escolha o coordenador depois (✎).';
+  return { nome, coordenador, data_inicio: r.data_inicio || '', data_fim: '', observacao };
 }
 
 async function handleImage(file) {
@@ -1040,7 +1082,7 @@ async function handleImage(file) {
   if (!safeGet(KEY_API)) { $('#noKey').classList.remove('hidden'); $('#importErr').textContent = 'Sem chave da API configurada.'; return; }
   $('#importStatus').innerHTML = '<span class="spinner"></span> Lendo a imagem… (pode levar até 1 minuto)';
   try {
-    const cursos = await readWithClaude(img);
+    const cursos = await readWithGemini(img);
     $('#importStatus').textContent = '';
     if (!cursos.length) { $('#importErr').textContent = 'Não encontrei cursos nessa imagem.'; return; }
     showDiff(cursos, file.name);
