@@ -368,6 +368,7 @@ td .who{display:flex;align-items:center;gap:7px}
     </div>
     <div class="modal-f">
       <button class="btn danger" id="cDelete" style="margin-right:auto">Excluir</button>
+      <button class="btn" id="cCrea">📄 Criativos</button>
       <button class="btn" data-close>Cancelar</button>
       <button class="btn primary" id="cSave">Salvar</button>
     </div>
@@ -785,12 +786,13 @@ function renderCal() {
 }
 
 // papelzinho verde no cronograma quando o tráfego já escreveu criativo (clicar abre o texto)
-const creaMark = c => (c.creative || '').trim() ? `<button class="crea-btn has mini" data-creative="${c.id}" title="Tem criativo escrito (abrir)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/></svg></button>` : '';
+// always = mostra também o papelzinho cinza (vazio), para abrir e escrever direto do cartão
+const creaMark = (c, always = false) => { const has = !!(c.creative || '').trim(); return has || always ? `<button class="crea-btn ${has ? 'has' : ''} mini" data-creative="${c.id}" title="${has ? 'Tem criativo escrito (abrir)' : 'Criativos: o tráfego escreve aqui'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/></svg></button>` : ''; };
 
 function postChipHTML(c, pk) {
   const n = pk === 'v1Post' ? 1 : 2, done = c[pk === 'v1Post' ? 'v1Pub' : 'v2Pub'];
   return `<div class="chip post v${n} ${done ? 'done' : ''}" draggable="true" data-id="${c.id}" data-post="${pk}" data-edit="${c.id}" title="${n}ª postagem: ${esc(c.name)}${done ? ' (publicado)' : ''}">
-    ${avatarHTML(coordById(c.coordId), 'xs')}<div class="t"><b>${done ? '✓ ' : ''}${n}ª postagem</b><span>${esc(c.name)}</span></div>${creaMark(c)}</div>`;
+    ${avatarHTML(coordById(c.coordId), 'xs')}<div class="t"><b>${done ? '✓ ' : ''}${n}ª postagem</b><span>${esc(c.name)}</span></div>${creaMark(c, true)}</div>`;
 }
 
 function chipHTML(c) {
@@ -798,7 +800,7 @@ function chipHTML(c) {
   const dl = deadlineOf(c);
   const late = dl && pd(c.recordDate) > dl && !recorded(c);
   return `<div class="chip ${recorded(c) ? 'gravado' : ''} ${late ? 'late' : ''}" draggable="true" data-id="${c.id}" data-edit="${c.id}" title="${esc(c.name)}${c.teacher ? ' — ' + esc(c.teacher) : ''}${c.phone ? ' · ' + esc(c.phone) : ''}${late ? ' (depois do prazo!)' : ''}">
-    ${avatarHTML(co, 'xs')}<div class="t"><b>${c.recordTime ? esc(c.recordTime) + ' · ' : ''}${esc(c.name)}</b><span>${esc(c.teacher || co?.name || '')}</span></div>${creaMark(c)}</div>`;
+    ${avatarHTML(co, 'xs')}<div class="t"><b>${c.recordTime ? esc(c.recordTime) + ' · ' : ''}${esc(c.name)}</b><span>${esc(c.teacher || co?.name || '')}</span></div>${creaMark(c, true)}</div>`;
 }
 
 const STATUS = { a_contatar: 'A contatar', contatado: 'Contatado', agendado: 'Agendado', gravado: 'Gravado (falta editar)', editado: 'Editado e pronto', cancelado: 'Cancelado' };
@@ -990,6 +992,7 @@ $('#cDelete').onclick = async () => {
   S.courses = S.courses.filter(c => c.id !== editing); save(); render(); $('#mCourse').classList.remove('open');
 };
 $('#btnAdd').onclick = () => openCourse(null);
+$('#cCrea').onclick = () => { if (editing) openCreative(editing); else toast('Salve o curso primeiro para escrever os criativos.'); };
 
 /* ============ Coordinators modal ============ */
 let photoFor = null;
